@@ -1,9 +1,34 @@
 import argparse
+import os
+import urllib.parse
 from getpass import getpass
 
+import psycopg
 from app.db import ROOT, connect
 from app.main import Credentials
 from app.security import hash_password
+
+
+def ensure_database():
+    url = os.environ.get("DATABASE_URL", "")
+    if not url:
+        return
+    parsed = urllib.parse.urlparse(url)
+    dbname = parsed.path.lstrip("/")
+    if not dbname:
+        return
+    postgres_url = urllib.parse.urlunparse(parsed._replace(path="/postgres"))
+    try:
+        with psycopg.connect(url, connect_timeout=3):
+            pass
+    except psycopg.OperationalError as ex:
+        if f'database "{dbname}" does not exist' in str(ex):
+            try:
+                with psycopg.connect(postgres_url, autocommit=True, connect_timeout=5) as conn:
+                    conn.execute(f'CREATE DATABASE "{dbname}"')
+                    print(f'已自動建立資料庫 "{dbname}"。')
+            except Exception as e:
+                print(f"嘗試建立資料庫失敗: {e}")
 
 
 def main():
@@ -12,6 +37,8 @@ def main():
     commands.add_parser("init")
     commands.add_parser("create-admin").add_argument("username")
     args = parser.parse_args()
+    if args.command == "init":
+        ensure_database()
     with connect() as db:
         if args.command == "init":
             migrations = sorted((ROOT / "database/migrations").glob("*.sql"))

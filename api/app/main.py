@@ -6,13 +6,13 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from psycopg.errors import UniqueViolation
 from pydantic import BaseModel, Field, field_validator
 
+from .auth import admin, bearer, current_user, dummy_hash, public_fields
 from .db import connect
+from .routers.bookings import router as bookings_router
 from .security import hash_password, matches, token_hash
 
 app = FastAPI(title="1151 SE 共用帳號與空間")
-bearer = HTTPBearer(auto_error=False)
-public_fields = "user_id, username, role, approval_status"
-dummy_hash = hash_password(secrets.token_urlsafe(32))
+app.include_router(bookings_router)
 
 
 class Credentials(BaseModel):
@@ -31,26 +31,6 @@ class Registration(Credentials):
 
 class Decision(BaseModel):
     status: Literal["approved", "rejected"]
-
-
-def current_user(auth: HTTPAuthorizationCredentials | None = Depends(bearer)):
-    if auth:
-        with connect() as db:
-            user = db.execute(
-                "SELECT u.user_id, username, role, approval_status FROM users u "
-                "JOIN auth_sessions s USING (user_id) WHERE token_hash=%s "
-                "AND expires_at > now() AND approval_status='approved'",
-                (token_hash(auth.credentials),),
-            ).fetchone()
-            if user:
-                return user
-    raise HTTPException(401, "請先登入或重新登入")
-
-
-def admin(user=Depends(current_user)):
-    if user["role"] != "admin":
-        raise HTTPException(403, "需要管理員權限")
-    return user
 
 
 @app.post("/api/auth/register", status_code=201)

@@ -35,3 +35,13 @@ INSERT INTO rooms (room_code, name, floor, capacity) VALUES
     ('管B15', '未來教室', 'B1', 40),
     ('管B11', '一般教室', 'B1', 100)
 ON CONFLICT (room_code) DO NOTHING;
+
+-- 預設可借用物品測試資料
+INSERT INTO borrowable_items (item_name, description, total_quantity) VALUES
+    ('教室鑰匙', '教室門鎖鑰匙（依預約教室配發）', 100),
+    ('投影筆', '無線簡報翻頁雷射筆', 10),
+    ('筆電', '教學與會議用筆記型電腦', 5),
+    ('無線麥克風', '手握式無線麥克風組', 8),
+    ('HDMI 轉接頭', 'Type-C / Mini-DP 轉 HDMI 視訊轉接頭', 15)
+ON CONFLICT (item_name) DO NOTHING;
+
