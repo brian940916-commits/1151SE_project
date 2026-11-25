@@ -8,6 +8,7 @@ $currentPage = $page ?? '';
   <?php if (!empty($user)): ?>
     · <a href="?page=booking_calendar"<?= $currentPage === 'booking_calendar' ? ' aria-current="page"' : '' ?>>空間／物品預約</a>
     · <a href="?page=booking_history"<?= $currentPage === 'booking_history' ? ' aria-current="page"' : '' ?>>我的借用紀錄</a>
+    · <a href="?page=change_password"<?= $currentPage === 'change_password' ? ' aria-current="page"' : '' ?>>修改密碼</a>
     <?php if ($user['role'] === 'admin'): ?>
       · <a href="?page=booking_admin"<?= $currentPage === 'booking_admin' ? ' aria-current="page"' : '' ?>>審核與領還管理</a>
       · <a href="?page=admin"<?= $currentPage === 'admin' ? ' aria-current="page"' : '' ?>>帳號審核</a>

@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 from ..auth import admin, current_user
 from ..db import connect
 from ..services.availability import (
+    assert_items_availability_for_booking,
     assert_no_conflict,
     get_room_weekly_availability,
     lock_room_for_update,
@@ -267,7 +268,7 @@ def review_booking(
         if booking["status"] != "pending":
             raise HTTPException(status_code=409, detail=f"該申請狀態為 {booking['status']}，已無法重複審核")
 
-        # 2. 若為核准，必須鎖定教室並重新檢查衝突
+        # 2. 若為核准，必須鎖定教室並重新檢查衝突，且檢查跨所有教室的物品重疊庫存
         if decision.status == "approved":
             lock_room_for_update(db, booking["room_id"])
             assert_no_conflict(
@@ -278,6 +279,7 @@ def review_booking(
                 booking["end_time"],
                 exclude_booking_id=booking_id,
             )
+            assert_items_availability_for_booking(db, booking_id)
             updated = db.execute(
                 """
                 UPDATE bookings

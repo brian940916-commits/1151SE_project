@@ -4,7 +4,7 @@ from typing import Literal
 from fastapi import Depends, FastAPI, HTTPException, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from psycopg.errors import UniqueViolation
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .auth import admin, bearer, current_user, dummy_hash, public_fields
 from .db import connect
@@ -27,6 +27,27 @@ class Credentials(BaseModel):
 
 class Registration(Credentials):
     role: Literal["student", "teacher"] = "student"
+    confirm_password: str | None = None
+
+    @model_validator(mode="after")
+    def validate_passwords(self):
+        if self.confirm_password is not None and self.confirm_password != self.password:
+            raise ValueError("密碼與確認密碼不相符")
+        return self
+
+
+class ChangePassword(BaseModel):
+    old_password: str = Field(min_length=8, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)
+    confirm_password: str = Field(min_length=8, max_length=128)
+
+    @model_validator(mode="after")
+    def validate_change(self):
+        if self.new_password != self.confirm_password:
+            raise ValueError("新密碼與確認新密碼不一致")
+        if self.old_password == self.new_password:
+            raise ValueError("新密碼不可與目前密碼相同")
+        return self
 
 
 class Decision(BaseModel):
@@ -69,6 +90,19 @@ def login(data: Credentials):
 @app.get("/api/auth/me")
 def me(user=Depends(current_user)):
     return user
+
+
+@app.post("/api/auth/change-password")
+def change_password(data: ChangePassword, user=Depends(current_user)):
+    with connect() as db:
+        user_row = db.execute("SELECT password_hash FROM users WHERE user_id=%s", (user["user_id"],)).fetchone()
+        if not user_row or not matches(data.old_password, user_row["password_hash"]):
+            raise HTTPException(400, "目前密碼不正確，請重新輸入")
+        db.execute(
+            "UPDATE users SET password_hash=%s WHERE user_id=%s",
+            (hash_password(data.new_password), user["user_id"]),
+        )
+        return {"message": "密碼已成功修改"}
 
 
 @app.post("/api/auth/logout", status_code=204)

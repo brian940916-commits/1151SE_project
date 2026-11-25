@@ -35,10 +35,38 @@ try {
                 $page = 'rooms';
                 break;
             case 'register':
-                $account = api('POST', '/api/auth/register', ['username' => $_POST['username'], 'password' => $_POST['password'], 'role' => $_POST['role']]);
+                $password = (string)($_POST['password'] ?? '');
+                $confirmPassword = (string)($_POST['confirm_password'] ?? '');
+                if ($password !== $confirmPassword) {
+                    throw new RuntimeException('兩次輸入的密碼不一致，請重新確認。');
+                }
+                $account = api('POST', '/api/auth/register', [
+                    'username' => $_POST['username'],
+                    'password' => $password,
+                    'confirm_password' => $confirmPassword,
+                    'role' => $_POST['role'],
+                ]);
                 $message = $account['approval_status'] === 'approved'
                     ? '學生帳號已建立，請登入。' : '老師帳號已送審，核准後即可登入。';
                 $page = 'login';
+                break;
+            case 'change_password':
+                $oldPassword = (string)($_POST['old_password'] ?? '');
+                $newPassword = (string)($_POST['new_password'] ?? '');
+                $confirmPassword = (string)($_POST['confirm_password'] ?? '');
+                if ($newPassword !== $confirmPassword) {
+                    throw new RuntimeException('新密碼與確認新密碼不一致，請重新確認。');
+                }
+                if ($oldPassword === $newPassword) {
+                    throw new RuntimeException('新密碼不可與目前密碼相同。');
+                }
+                api('POST', '/api/auth/change-password', [
+                    'old_password' => $oldPassword,
+                    'new_password' => $newPassword,
+                    'confirm_password' => $confirmPassword,
+                ]);
+                $message = '密碼已成功修改！';
+                $page = 'rooms';
                 break;
             case 'review':
                 api('POST', '/api/admin/users/' . (int)$_POST['id'] . '/review', ['status' => $_POST['decision']]);
@@ -107,7 +135,7 @@ try {
     }
 
     // 需登入之頁面檢查
-    if (in_array($page, ['booking_calendar', 'booking_history', 'booking_admin'], true)) {
+    if (in_array($page, ['booking_calendar', 'booking_history', 'booking_admin', 'change_password'], true)) {
         if (!$user) {
             $_SESSION['flash'] = '請先登入系統。';
             header('Location: ?page=login', true, 303);
@@ -158,8 +186,21 @@ try {
   <form method="post"><?php csrf(); ?>
   <p><label>帳號 <input name="username" autocomplete="username" pattern="[A-Za-z0-9_.\-]{3,40}" required></label>（3–40 個英數字、底線、點或短橫線）</p>
   <p><label>密碼 <input type="password" name="password" minlength="8" maxlength="128" autocomplete="<?=$register ? 'new-password' : 'current-password'?>" required></label>（至少 8 字元）</p>
-  <?php if ($register): ?><p><label>申請身分 <select name="role"><option value="student">學生</option><option value="teacher">老師</option></select></label>　學生註冊後可直接登入；老師帳號須由管理員核准。</p><?php endif; ?>
+  <?php if ($register): ?>
+  <p><label>確認密碼 <input type="password" name="confirm_password" minlength="8" maxlength="128" autocomplete="new-password" required></label>（請再次輸入密碼以確認）</p>
+  <p><label>申請身分 <select name="role"><option value="student">學生</option><option value="teacher">老師</option></select></label>　學生註冊後可直接登入；老師帳號須由管理員核准。</p>
+  <?php endif; ?>
   <button name="action" value="<?=$page?>"><?=$register ? '送出申請' : '登入'?></button></form>
+
+<?php elseif ($page === 'change_password' && !$error): ?>
+  <h1>修改個人密碼</h1>
+  <p>為保護帳號安全，請先輸入您目前的舊密碼，並設定至少 8 字元的新密碼（新密碼必須輸入兩次確認）。</p>
+  <form method="post"><?php csrf(); ?>
+  <input type="hidden" name="action" value="change_password">
+  <p><label>目前舊密碼 <input type="password" name="old_password" minlength="8" maxlength="128" autocomplete="current-password" required></label></p>
+  <p><label>設定新密碼 <input type="password" name="new_password" minlength="8" maxlength="128" autocomplete="new-password" required></label>（至少 8 字元）</p>
+  <p><label>確認新密碼 <input type="password" name="confirm_password" minlength="8" maxlength="128" autocomplete="new-password" required></label>（請再次輸入新密碼）</p>
+  <button type="submit">確認修改密碼</button></form>
 
 <?php elseif ($page === 'admin' && !$error): ?>
   <h1>待審帳號</h1>
