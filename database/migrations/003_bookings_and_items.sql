@@ -46,3 +46,7 @@ CREATE TABLE IF NOT EXISTS booking_items (
 );
 
 CREATE INDEX IF NOT EXISTS idx_booking_items_booking ON booking_items (booking_id);
+
+-- 4. 預設空間開放借用
+ALTER TABLE rooms ALTER COLUMN is_bookable SET DEFAULT true;
+UPDATE rooms SET is_bookable = true WHERE is_bookable IS NULL;

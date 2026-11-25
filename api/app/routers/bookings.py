@@ -4,13 +4,15 @@
 借用紀錄查詢、管理員審核、領用借出與確認歸還等功能。
 """
 
+import urllib.parse
 from datetime import date, datetime, time, timedelta
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
-from ..auth import admin, current_user
+from ..auth import admin, current_user, optional_user
 from ..db import connect
 from ..services.availability import (
     assert_items_availability_for_booking,
@@ -18,6 +20,7 @@ from ..services.availability import (
     get_room_weekly_availability,
     lock_room_for_update,
 )
+from ..templates import render_template
 
 router = APIRouter(tags=["bookings"])
 
@@ -173,9 +176,9 @@ def create_booking(
 
 @router.get("/api/bookings")
 def list_bookings(
-    status: str | None = Query(None),
-    room_id: int | None = Query(None),
-    user_id: int | None = Query(None),
+    status: str | None = None,
+    room_id: int | None = None,
+    user_id: int | None = None,
     user=Depends(current_user),
 ):
     """瀏覽借用紀錄。一般使用者只看自己；管理員可看全部並支援依 status、room_id 篩選（供排課模組查詢）。"""
@@ -395,3 +398,292 @@ def return_booking(
         )
 
         return _format_booking_row(dict(updated))
+
+
+# =========================================================================
+# SSR Web Endpoints
+# =========================================================================
+
+
+@router.get("/bookings/calendar")
+def calendar_page(
+    request: Request,
+    room_id: int | None = Query(None),
+    week_start: date | None = Query(None),
+    user=Depends(optional_user),
+):
+    if not user:
+        return RedirectResponse(
+            url=f"/auth/login?error={urllib.parse.quote('請先登入系統')}",
+            status_code=303,
+        )
+
+    with connect() as db:
+        rooms = db.execute(
+            "SELECT room_id, room_code, name, floor, capacity, is_bookable FROM rooms "
+            "ORDER BY CASE WHEN floor='B1' THEN 0 ELSE floor::integer END, room_code"
+        ).fetchall()
+        items = db.execute(
+            "SELECT item_id, item_name, description FROM borrowable_items WHERE is_active = true ORDER BY item_id"
+        ).fetchall()
+
+    if not rooms:
+        selected_room_id = 1
+    elif room_id is not None and any(r["room_id"] == room_id for r in rooms):
+        selected_room_id = room_id
+    else:
+        bookable = [r for r in rooms if r["is_bookable"] is not False]
+        selected_room_id = bookable[0]["room_id"] if bookable else rooms[0]["room_id"]
+
+    today = date.today()
+    if week_start is None:
+        target_week_start = today - timedelta(days=today.weekday())
+    else:
+        target_week_start = week_start
+
+    with connect() as db:
+        weekly_data = get_room_weekly_availability(db, selected_room_id, target_week_start)
+
+    prev_week = (target_week_start - timedelta(days=7)).isoformat()
+    next_week = (target_week_start + timedelta(days=7)).isoformat()
+    current_week = (today - timedelta(days=today.weekday())).isoformat()
+
+    days_of_week = ["一", "二", "三", "四", "五", "六", "日"]
+    day_slots = []
+    bookings_by_date: dict[str, list] = {}
+    for b in weekly_data.get("bookings", []):
+        b_date = b["booking_date"]
+        bookings_by_date.setdefault(b_date, []).append(b)
+
+    for i in range(7):
+        slot_date = target_week_start + timedelta(days=i)
+        date_str = slot_date.isoformat()
+        day_slots.append({
+            "date": date_str,
+            "label": f"週{days_of_week[i]} ({slot_date.strftime('%m/%d')})",
+            "bookings": bookings_by_date.get(date_str, []),
+        })
+
+    form_booking_date = max(today.isoformat(), weekly_data["week_start"])
+    message = request.query_params.get("message")
+    error = request.query_params.get("error")
+
+    return render_template(
+        request,
+        "bookings/calendar.html",
+        {
+            "user": user,
+            "rooms": rooms,
+            "items": items,
+            "selected_room_id": selected_room_id,
+            "weekly_data": weekly_data,
+            "prev_week": prev_week,
+            "next_week": next_week,
+            "current_week": current_week,
+            "day_slots": day_slots,
+            "today": today.isoformat(),
+            "form_booking_date": form_booking_date,
+            "message": message,
+            "error": error,
+        },
+    )
+
+
+@router.post("/bookings/calendar")
+def web_create_booking(
+    request: Request,
+    room_id: int = Form(...),
+    booking_date: str = Form(...),
+    start_time: str = Form(...),
+    end_time: str = Form(...),
+    purpose: str = Form(...),
+    item_ids: list[int] = Form(default=[]),
+    user=Depends(optional_user),
+):
+    if not user:
+        return RedirectResponse(
+            url=f"/auth/login?error={urllib.parse.quote('請先登入系統')}",
+            status_code=303,
+        )
+
+    try:
+        booking_data = BookingCreate(
+            room_id=room_id,
+            booking_date=date.fromisoformat(booking_date),
+            start_time=time.fromisoformat(start_time),
+            end_time=time.fromisoformat(end_time),
+            purpose=purpose.strip(),
+            item_ids=item_ids,
+        )
+        create_booking(booking_data, user=user)
+        return RedirectResponse(
+            url=f"/bookings/history?message={urllib.parse.quote('借用申請已成功送出，請等待管理員審核。')}",
+            status_code=303,
+        )
+    except HTTPException as ex:
+        return RedirectResponse(
+            url=f"/bookings/calendar?room_id={room_id}&error={urllib.parse.quote(str(ex.detail))}",
+            status_code=303,
+        )
+    except Exception as ex:
+        return RedirectResponse(
+            url=f"/bookings/calendar?room_id={room_id}&error={urllib.parse.quote(f'預約失敗: {ex}')}",
+            status_code=303,
+        )
+
+
+@router.get("/bookings/history")
+def history_page(request: Request, user=Depends(optional_user)):
+    if not user:
+        return RedirectResponse(
+            url=f"/auth/login?error={urllib.parse.quote('請先登入系統')}",
+            status_code=303,
+        )
+    bookings = list_bookings(status=None, user_id=user["user_id"], user=user)
+    message = request.query_params.get("message")
+    error = request.query_params.get("error")
+    return render_template(
+        request,
+        "bookings/history.html",
+        {
+            "user": user,
+            "bookings": bookings,
+            "message": message,
+            "error": error,
+        },
+    )
+
+
+@router.get("/admin/bookings")
+def admin_bookings_page(
+    request: Request,
+    status: str | None = Query(None),
+    user=Depends(optional_user),
+):
+    if not user:
+        return RedirectResponse(
+            url=f"/auth/login?error={urllib.parse.quote('請先登入系統')}",
+            status_code=303,
+        )
+    if user["role"] != "admin":
+        return render_template(
+            request,
+            "bookings/admin.html",
+            {
+                "user": user,
+                "bookings": [],
+                "current_status": status or "",
+                "error": "需要管理員權限",
+            },
+            status_code=403,
+        )
+
+    bookings = list_bookings(status=status if status else None, user=user)
+    message = request.query_params.get("message")
+    error = request.query_params.get("error")
+    return render_template(
+        request,
+        "bookings/admin.html",
+        {
+            "user": user,
+            "bookings": bookings,
+            "current_status": status or "",
+            "message": message,
+            "error": error,
+        },
+    )
+
+
+@router.post("/admin/bookings/{booking_id}/review")
+def web_review_booking(
+    request: Request,
+    booking_id: int,
+    decision: str = Form(...),
+    review_comment: str | None = Form(None),
+    user=Depends(optional_user),
+):
+    if not user or user["role"] != "admin":
+        return RedirectResponse(
+            url=f"/auth/login?error={urllib.parse.quote('需要管理員權限')}",
+            status_code=303,
+        )
+    if decision not in ("approved", "rejected"):
+        decision = "approved"
+
+    try:
+        dec = ReviewDecision(status=decision, review_comment=review_comment.strip() if review_comment else None)
+        review_booking(booking_id=booking_id, decision=dec, admin_user=user)
+        msg = "已核准借用申請。" if decision == "approved" else "已退件該借用申請。"
+        return RedirectResponse(
+            url=f"/admin/bookings?message={urllib.parse.quote(msg)}",
+            status_code=303,
+        )
+    except HTTPException as ex:
+        return RedirectResponse(
+            url=f"/admin/bookings?error={urllib.parse.quote(str(ex.detail))}",
+            status_code=303,
+        )
+    except Exception as ex:
+        return RedirectResponse(
+            url=f"/admin/bookings?error={urllib.parse.quote(f'審核操作失敗: {ex}')}",
+            status_code=303,
+        )
+
+
+@router.post("/admin/bookings/{booking_id}/checkout")
+def web_checkout_booking(
+    request: Request,
+    booking_id: int,
+    user=Depends(optional_user),
+):
+    if not user or user["role"] != "admin":
+        return RedirectResponse(
+            url=f"/auth/login?error={urllib.parse.quote('需要管理員權限')}",
+            status_code=303,
+        )
+    try:
+        checkout_booking(booking_id=booking_id, admin_user=user)
+        return RedirectResponse(
+            url=f"/admin/bookings?message={urllib.parse.quote('已完成借出領用登記。')}",
+            status_code=303,
+        )
+    except HTTPException as ex:
+        return RedirectResponse(
+            url=f"/admin/bookings?error={urllib.parse.quote(str(ex.detail))}",
+            status_code=303,
+        )
+    except Exception as ex:
+        return RedirectResponse(
+            url=f"/admin/bookings?error={urllib.parse.quote(f'借出登記失敗: {ex}')}",
+            status_code=303,
+        )
+
+
+@router.post("/admin/bookings/{booking_id}/return")
+def web_return_booking(
+    request: Request,
+    booking_id: int,
+    user=Depends(optional_user),
+):
+    if not user or user["role"] != "admin":
+        return RedirectResponse(
+            url=f"/auth/login?error={urllib.parse.quote('需要管理員權限')}",
+            status_code=303,
+        )
+    try:
+        return_booking(booking_id=booking_id, admin_user=user)
+        return RedirectResponse(
+            url=f"/admin/bookings?message={urllib.parse.quote('已確認歸還完成。')}",
+            status_code=303,
+        )
+    except HTTPException as ex:
+        return RedirectResponse(
+            url=f"/admin/bookings?error={urllib.parse.quote(str(ex.detail))}",
+            status_code=303,
+        )
+    except Exception as ex:
+        return RedirectResponse(
+            url=f"/admin/bookings?error={urllib.parse.quote(f'歸還登記失敗: {ex}')}",
+            status_code=303,
+        )
+

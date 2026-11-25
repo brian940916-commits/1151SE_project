@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+
+{% block title %}空間與物品預約 - 1151 SE 管院空間系統{% endblock %}
+
+{% block content %}
+<section>
+  <h1>空間與物品預約</h1>
+  <p>以週為單位檢視空間借用情形，相鄰時段（例如 10:00–11:00 與 11:00–12:00）可銜接借用。</p>
+
+  <!-- 1. 教室切換與週次導航 -->
+  <fieldset>
+    <legend>檢視設定</legend>
+    <form method="get" action="/bookings/calendar" style="display:inline-block; margin-bottom: 10px;">
+      <label>選擇空間：
+        <select name="room_id" onchange="this.form.submit()">
+          {% for r in rooms %}
+            <option value="{{ r.room_id }}" {% if r.room_id == selected_room_id %}selected{% endif %}>
+              {{ r.room_code }} - {{ r.name }} ({{ r.floor }}F, 容量 {{ r.capacity if r.capacity is not none else '待確認' }}人)
+            </option>
+          {% endfor %}
+        </select>
+      </label>
+      <input type="hidden" name="week_start" value="{{ weekly_data.week_start }}">
+      <noscript><button type="submit">切換教室</button></noscript>
+    </form>
+
+    <div style="margin-top: 5px;">
+      <span><strong>目前週次：</strong>{{ weekly_data.week_start }} ～ {{ weekly_data.week_end }}</span>
+      · <a href="/bookings/calendar?room_id={{ selected_room_id }}&week_start={{ prev_week }}">&laquo; 上一週</a>
+      · <a href="/bookings/calendar?room_id={{ selected_room_id }}&week_start={{ current_week }}">回到本週</a>
+      · <a href="/bookings/calendar?room_id={{ selected_room_id }}&week_start={{ next_week }}">下一週 &raquo;</a>
+    </div>
+  </fieldset>
+
+  <!-- 2. 週占用檢視表 -->
+  <h2>週借用占用狀況</h2>
+  <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse; width:100%; margin-bottom: 25px;">
+    <thead>
+      <tr bgcolor="#f0f0f0">
+        {% for slot in day_slots %}
+          <th style="width:14.28%; text-align:center;">{{ slot.label }}</th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      <tr valign="top">
+        {% for slot in day_slots %}
+          <td>
+            {% if not slot.bookings %}
+              <span style="color:#888;">(無預約)</span>
+            {% else %}
+              {% for bk in slot.bookings %}
+                <div style="border-bottom: 1px dashed #ccc; margin-bottom: 6px; padding-bottom: 4px;">
+                  <strong>{{ bk.start_time }}-{{ bk.end_time }}</strong><br>
+                  狀態：[{% if bk.status == 'pending' %}審核中{% elif bk.status == 'approved' %}已核准{% elif bk.status == 'checked_out' %}借出中{% elif bk.status == 'returned' %}已歸還{% elif bk.status == 'rejected' %}已退件{% else %}{{ bk.status }}{% endif %}]<br>
+                  事由：{{ bk.purpose }}<br>
+                  申請人：{{ bk.applicant_username or '使用者' }}
+                </div>
+              {% endfor %}
+            {% endif %}
+          </td>
+        {% endfor %}
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- 3. 新增預約表單 -->
+  <h2>填寫借用申請</h2>
+  <form method="post" action="/bookings/calendar">
+    <p>
+      <label>借用空間：
+        <select name="room_id" required>
+          {% for r in rooms %}
+            <option value="{{ r.room_id }}" {% if r.room_id == selected_room_id %}selected{% endif %}>
+              {{ r.room_code }} - {{ r.name }} ({{ r.floor }}F)
+            </option>
+          {% endfor %}
+        </select>
+      </label>
+    </p>
+
+    <p>
+      <label>借用日期：
+        <input type="date" name="booking_date" min="{{ today }}" value="{{ form_booking_date }}" required>
+      </label>
+    </p>
+
+    <p>
+      <label>開始時間：
+        <input type="time" name="start_time" value="10:00" step="1800" required>
+      </label>
+      ～
+      <label>結束時間：
+        <input type="time" name="end_time" value="12:00" step="1800" required>
+      </label>
+      <small>（時段須相容銜接，結束時間須晚於開始時間）</small>
+    </p>
+
+    <fieldset style="margin-bottom: 15px;">
+      <legend>借用物品（多選）</legend>
+      {% if not items %}
+        <p>目前無可用借用物品。</p>
+      {% else %}
+        {% for it in items %}
+          <label style="display:inline-block; margin-right: 15px; margin-bottom: 5px;">
+            <input type="checkbox" name="item_ids" value="{{ it.item_id }}">
+            <strong>{{ it.item_name }}</strong>
+            {% if it.description %}
+              <small>({{ it.description }})</small>
+            {% endif %}
+          </label>
+        {% endfor %}
+      {% endif %}
+    </fieldset>
+
+    <p>
+      <label>借用事由：<br>
+        <textarea name="purpose" rows="3" cols="50" required placeholder="請詳細說明活動名稱、使用目的或課程相關資訊..."></textarea>
+      </label>
+    </p>
+
+    <p>
+      <button type="submit">送出預約申請</button>
+    </p>
+  </form>
+</section>
+{% endblock %}

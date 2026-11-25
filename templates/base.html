@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}1151 SE 管院空間系統{% endblock %}</title>
+</head>
+<body>
+  <!-- 全站共用導覽列 -->
+  <nav>
+    <a href="/spaces">教室清單</a>
+    {% if user %}
+      · <a href="/bookings/calendar">空間／物品預約</a>
+      · <a href="/bookings/history">借用紀錄</a>
+      · <a href="/scheduling">志願排課</a>
+      {% if user.role == 'admin' %}
+        · <a href="/admin/bookings">審核與領還管理</a>
+        · <a href="/admin/users">帳號審核</a>
+      {% endif %}
+      · <a href="/auth/change-password">修改密碼</a>
+      · <strong>{{ user.username }}</strong>（{% if user.role == 'student' %}學生{% elif user.role == 'teacher' %}老師{% elif user.role == 'admin' %}管理員{% else %}{{ user.role }}{% endif %}）
+      <form action="/auth/logout" method="post" style="display:inline;">
+        <button type="submit">登出</button>
+      </form>
+    {% else %}
+      · <a href="/auth/login">登入</a>
+      · <a href="/auth/register">註冊</a>
+    {% endif %}
+  </nav>
+  <hr>
+
+  <!-- 系統提示訊息區 -->
+  <main>
+    {% if message %}<p role="status" style="color: green;"><strong>{{ message }}</strong></p>{% endif %}
+    {% if error %}<p role="alert" style="color: red;"><strong>{{ error }}</strong></p>{% endif %}
+
+    <!-- 各模組內容填入區 -->
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

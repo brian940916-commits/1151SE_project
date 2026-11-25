@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}帳號審核 - 1151 SE 管院空間系統{% endblock %}
+
+{% block content %}
+<h1>待審核帳號清單</h1>
+{% if not pending_users %}
+  <p>目前沒有待審核的帳號申請。</p>
+{% else %}
+  <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse; width:100%;">
+    <thead>
+      <tr bgcolor="#f0f0f0">
+        <th>編號</th>
+        <th>帳號名稱</th>
+        <th>申請身分</th>
+        <th>審核操作</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for person in pending_users %}
+      <tr>
+        <td align="center">#{{ person.user_id }}</td>
+        <td><strong>{{ person.username }}</strong></td>
+        <td align="center">{% if person.role == 'student' %}學生{% elif person.role == 'teacher' %}老師{% elif person.role == 'admin' %}管理員{% else %}{{ person.role }}{% endif %}</td>
+        <td>
+          <form method="post" action="/admin/users/{{ person.user_id }}/review" style="display:inline;">
+            <button type="submit" name="decision" value="approved">核准</button>
+            <button type="submit" name="decision" value="rejected">退件</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endif %}
+{% endblock %}

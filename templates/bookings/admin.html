@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+
+{% block title %}借用審核與領還管理 - 1151 SE 管院空間系統{% endblock %}
+
+{% block content %}
+<section>
+  <h1>空間與物品借用管理（管理員專區）</h1>
+  <p>處理各空間與物品借用審核、登記借出鑰匙與器材領用，以及確認歸還作業。</p>
+
+  <!-- 篩選列 -->
+  <p>
+    <strong>狀態篩選：</strong>
+    {% for st, label in [('', '全部紀錄'), ('pending', '待審核'), ('approved', '已核准 (待領用)'), ('checked_out', '借出中 (待歸還)'), ('returned', '已歸還'), ('rejected', '已退件')] %}
+      {% if st == current_status %}
+        <strong>[{{ label }}]</strong>
+      {% else %}
+        <a href="/admin/bookings{% if st %}?status={{ st }}{% endif %}">{{ label }}</a>
+      {% endif %}
+      &nbsp;|&nbsp;
+    {% endfor %}
+  </p>
+
+  {% if not bookings %}
+    <p>目前沒有符合條件的借用申請紀錄。</p>
+  {% else %}
+    <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse; width:100%;">
+      <thead>
+        <tr bgcolor="#f0f0f0">
+          <th>編號</th>
+          <th>申請人</th>
+          <th>空間</th>
+          <th>日期與時段</th>
+          <th>借用物品</th>
+          <th>事由</th>
+          <th>目前狀態</th>
+          <th>紀錄與經手人</th>
+          <th style="min-width: 220px;">管理操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for b in bookings %}
+          <tr valign="top">
+            <td align="center">#{{ b.booking_id }}</td>
+            <td>
+              <strong>{{ b.applicant_username }}</strong><br>
+              <small>({% if b.applicant_role == 'student' %}學生{% elif b.applicant_role == 'teacher' %}老師{% elif b.applicant_role == 'admin' %}管理員{% else %}{{ b.applicant_role }}{% endif %})</small>
+            </td>
+            <td>{{ b.room_code }}<br><small>{{ b.room_name }}</small></td>
+            <td>
+              {{ b.booking_date }}<br>
+              <strong>{{ b.start_time }} - {{ b.end_time }}</strong>
+            </td>
+            <td>
+              {% if not b['items'] %}
+                <span style="color:#888;">(無物品)</span>
+              {% else %}
+                <ul style="margin:0; padding-left:16px;">
+                  {% for it in b['items'] %}
+                    <li>{{ it.item_name }} <small>({{ it.status }})</small></li>
+                  {% endfor %}
+                </ul>
+              {% endif %}
+            </td>
+            <td>{{ b.purpose }}</td>
+            <td align="center">
+              <strong>
+                {% if b.status == 'pending' %}待審核
+                {% elif b.status == 'approved' %}已核准 (待領用)
+                {% elif b.status == 'checked_out' %}借出中 (待歸還)
+                {% elif b.status == 'returned' %}已歸還
+                {% elif b.status == 'rejected' %}已退件
+                {% else %}{{ b.status }}{% endif %}
+              </strong>
+            </td>
+            <td>
+              {% if b.review_comment %}
+                審核意見：{{ b.review_comment }}<br>
+              {% endif %}
+              {% if b.reviewer_username %}
+                審核：{{ b.reviewer_username }} ({{ b.reviewed_at[:16] if b.reviewed_at else '-' }})<br>
+              {% endif %}
+              {% if b.checkout_operator %}
+                借出：{{ b.checkout_operator }} ({{ b.checked_out_at[:16] if b.checked_out_at else '-' }})<br>
+              {% endif %}
+              {% if b.return_operator %}
+                歸還：{{ b.return_operator }} ({{ b.returned_at[:16] if b.returned_at else '-' }})
+              {% endif %}
+            </td>
+            <td>
+              {% if b.status == 'pending' %}
+                <!-- 待審核操作 -->
+                <form method="post" action="/admin/bookings/{{ b.booking_id }}/review">
+                  <input type="text" name="review_comment" placeholder="審核備註/意見 (可選)" style="width: 95%; margin-bottom: 5px;"><br>
+                  <button type="submit" name="decision" value="approved">核准申請</button>
+                  <button type="submit" name="decision" value="rejected" onclick="return confirm('確定退件此申請？')">退件</button>
+                </form>
+              {% elif b.status == 'approved' %}
+                <!-- 註記借出領用 -->
+                <form method="post" action="/admin/bookings/{{ b.booking_id }}/checkout">
+                  <button type="submit" onclick="return confirm('確認已發放鑰匙與相關物品並登記借出？')">
+                    註記借出領用
+                  </button>
+                </form>
+              {% elif b.status == 'checked_out' %}
+                <!-- 確認歸還 -->
+                <form method="post" action="/admin/bookings/{{ b.booking_id }}/return">
+                  <button type="submit" onclick="return confirm('確認空間鑰匙與借用物品皆已如數歸還？')">
+                    確認歸還完成
+                  </button>
+                </form>
+              {% else %}
+                <span style="color:#666;">處理完畢</span>
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+</section>
+{% endblock %}

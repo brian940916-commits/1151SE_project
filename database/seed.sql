@@ -45,3 +45,7 @@ INSERT INTO borrowable_items (item_name, description, total_quantity) VALUES
     ('HDMI 轉接頭', 'Type-C / Mini-DP 轉 HDMI 視訊轉接頭', 15)
 ON CONFLICT (item_name) DO NOTHING;
 
+-- 確保所有空間預設具備借用資格
+UPDATE rooms SET is_bookable = true WHERE is_bookable IS NULL;
+UPDATE rooms SET is_schedulable = true WHERE is_schedulable IS NULL;
+

@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}註冊帳號 - 1151 SE 管院空間系統{% endblock %}
+
+{% block content %}
+<h1>註冊帳號</h1>
+<form method="post" action="/auth/register">
+  <p>
+    <label>帳號：<br>
+      <input name="username" autocomplete="username" pattern="[A-Za-z0-9_.\-]{3,40}" required autofocus>
+    </label>
+    <small>（3–40 個英數字、底線、點或短橫線）</small>
+  </p>
+  <p>
+    <label>密碼：<br>
+      <input type="password" name="password" minlength="8" maxlength="128" autocomplete="new-password" required>
+    </label>
+    <small>（至少 8 字元）</small>
+  </p>
+  <p>
+    <label>確認密碼：<br>
+      <input type="password" name="confirm_password" minlength="8" maxlength="128" autocomplete="new-password" required>
+    </label>
+    <small>（請再次輸入密碼以確認）</small>
+  </p>
+  <p>
+    <label>申請身分：<br>
+      <select name="role">
+        <option value="student">學生</option>
+        <option value="teacher">老師</option>
+      </select>
+    </label>
+    <small>（學生註冊後可直接登入；老師帳號須由管理員審核）</small>
+  </p>
+  <p>
+    <button type="submit">送出申請</button>
+  </p>
+</form>
+<p>已有帳號？<a href="/auth/login">前往登入</a></p>
+{% endblock %}
