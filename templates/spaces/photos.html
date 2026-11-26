@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}{{ room.room_code }} 照片管理{% endblock %}
+{% block content %}
+<a href="/spaces/{{ room.room_id }}">回到 {{ room.room_code }} 教室詳情</a>
+<h1>{{ room.room_code }} 照片管理</h1>
+<p>可上傳 JPG、PNG 或 WebP，每張最多 10 MB。</p>
+<div class="photo-editor">
+{% for kind, title, url in [('cover', '清單封面', room.cover_url), ('interior', '教室詳情照片', room.photo_url)] %}
+  <section>
+    <h2>{{ title }}</h2>
+    {% if url %}<img src="{{ url }}" alt="現有{{ title }}" referrerpolicy="no-referrer">{% else %}<p>尚未設定照片。</p>{% endif %}
+    <form method="post" action="/admin/spaces/{{ room.room_id }}/photos/{{ kind }}" enctype="multipart/form-data">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label>選擇{{ title }} <input name="photo" type="file" accept="image/jpeg,image/png,image/webp" required></label>
+      <button type="submit">儲存{{ title }}</button>
+    </form>
+    {% if url %}
+    <form method="post" action="/admin/spaces/{{ room.room_id }}/photos/{{ kind }}/remove">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button type="submit">移除{{ title }}</button>
+    </form>
+    {% endif %}
+  </section>
+{% endfor %}
+</div>
+{% endblock %}

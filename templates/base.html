@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{% endblock %}｜管院空間系統</title>
+  <link rel="stylesheet" href="{{ url_for('static', path='site.css') }}">
+</head>
+<body>
+  <header><nav aria-label="主選單">
+    <a href="/spaces">管院教室清單</a>
+    {% if user %}
+      {% if user.role == 'admin' %}<a href="/admin/users">帳號審核</a>{% endif %}
+      <span>{{ user.username }}（{{ {'admin':'管理員', 'student':'學生', 'teacher':'老師'}[user.role] }}）</span>
+      <form method="post" action="/auth/logout">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button type="submit">登出</button>
+      </form>
+    {% else %}
+      <a href="/auth/login">登入</a><a href="/auth/register">註冊</a>
+    {% endif %}
+  </nav></header>
+  <main>
+    {% if message %}<p role="status">{{ message }}</p>{% endif %}
+    {% if error %}<p role="alert">{{ error }}</p>{% endif %}
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

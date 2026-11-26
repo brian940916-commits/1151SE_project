@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}管院教室清單{% endblock %}
+{% block content %}
+<h1>管院教室清單</h1>
+<p>共 {{ count }} 筆。借用及排課資格待確認。</p>
+<nav class="floor-links" aria-label="跳至樓層">
+  {% for floor in floors %}<a href="#floor-{{ floor }}">{{ floor }} 樓</a>{% endfor %}
+</nav>
+{% for floor, rooms in floors.items() %}
+<section id="floor-{{ floor }}" class="floor-section">
+  <h2>{{ floor }} 樓</h2>
+  <div class="room-grid">
+    {% for room in rooms %}
+    <a class="room-card" href="{{ url_for('room_detail', room_id=room.room_id) }}">
+      {% if room.cover_url %}<img src="{{ room.cover_url }}" alt="" loading="lazy" referrerpolicy="no-referrer">
+      {% else %}<span class="no-photo">照片待補</span>{% endif %}
+      <div><h3>{{ room.room_code }}</h3><p>{{ room.name }} · {{ (room.capacity|string ~ ' 人') if room.capacity is not none else '容量待確認' }}</p></div>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+{% endfor %}
+<p class="photo-credit"><a href="https://www.ibs.ncnu.edu.tw/index.php/resources/space-classroom">校方照片來源</a></p>
+{% endblock %}

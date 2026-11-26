@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}{{ room.room_code }} {{ room.name }}{% endblock %}
+{% block content %}
+<a href="/spaces#floor-{{ room.floor }}">回到 {{ room.floor }} 樓教室清單</a>
+<h1>{{ room.room_code }} <span>{{ room.name }}</span></h1>
+<p>{{ room.floor }} 樓 · {{ (room.capacity|string ~ ' 人') if room.capacity is not none else '容量待確認' }}</p>
+{% if user and user.role == 'admin' %}<p><a href="/admin/spaces/{{ room.room_id }}/edit">編輯教室資料</a> · <a href="/admin/spaces/{{ room.room_id }}/photos">管理這間教室的照片</a></p>{% endif %}
+<div class="room-detail">
+  <section class="room-media" aria-label="教室影像">
+    {% if room.panorama_embed_url %}
+    <h2>360° 教室實景</h2>
+    <iframe src="{{ room.panorama_embed_url }}" title="{{ room.room_code }} 360° 實景" loading="lazy" allowfullscreen referrerpolicy="no-referrer"></iframe>
+    <a href="{{ room.panorama_embed_url }}">獨立開啟全景導覽</a>
+    {% else %}
+    <h2>教室照片</h2>
+    {% if room.photo_url or room.cover_url %}
+    <img src="{{ room.photo_url or room.cover_url }}" alt="{{ room.room_code }}教室照片" referrerpolicy="no-referrer">
+    {% else %}<p>教室照片待補。</p>
+    {% endif %}
+    <p class="photo-credit">360° 實景尚未提供。</p>
+    {% endif %}
+  </section>
+  <div class="room-info">
+    <section><h2>借鑰匙與管理單位</h2>
+      <dl><dt>管理單位</dt><dd>{{ room.managing_office or '待確認' }}</dd>
+      <dt>借鑰匙方式</dt><dd>{{ room.key_instructions or '領取方式待確認。' }}</dd></dl>
+    </section>
+    <section><h2>教室設備</h2>
+      {% if room.equipment %}<ul class="equipment">{% for item in room.equipment %}<li>{{ item }}</li>{% endfor %}</ul>
+      {% else %}<p>設備資料待補。</p>{% endif %}
+    </section>
+  </div>
+</div>
+{% if booking_url %}<p><a href="{{ booking_url }}">前往借用模組</a></p>
+{% else %}<p>借用功能待整合。</p>{% endif %}
+{% if room.source_url %}<p class="photo-credit"><a href="{{ room.source_url }}">校方教室資料</a></p>{% endif %}
+{% endblock %}

@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}編輯 {{ room.room_code }} 教室資料{% endblock %}
+{% block content %}
+<a href="/spaces/{{ room.room_id }}">回到 {{ room.room_code }} 教室詳情</a>
+<h1>編輯 {{ room.room_code }} 教室資料</h1>
+{% if conflict %}<a href="/admin/spaces/{{ room.room_id }}/edit" target="_blank" rel="noopener">另開最新版本</a>{% endif %}
+<form class="account" method="post" action="/admin/spaces/{{ room.room_id }}/edit">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <input type="hidden" name="version" value="{{ version }}">
+  <label>教室名稱<input name="name" value="{{ room.name }}" required></label>
+  <label>樓層<select name="floor">{% for f in ['B1','1','2','3','4'] %}<option value="{{ f }}" {% if room.floor == f %}selected{% endif %}>{{ f }} 樓</option>{% endfor %}</select></label>
+  <label>容量（人）<small>待確認可留白</small><input type="number" min="1" step="1" name="capacity" value="{{ room.capacity if room.capacity is not none else '' }}"></label>
+  <label>管理單位<input name="managing_office" value="{{ room.managing_office or '' }}"></label>
+  <label>借鑰匙方式<textarea name="key_instructions" rows="3">{{ room.key_instructions or '' }}</textarea></label>
+  <label>教室設備<small>每行填寫一項</small><textarea name="equipment" rows="6">{{ (room.equipment or [])|join('\n') }}</textarea></label>
+  <button type="submit">儲存教室資料</button>
+</form>
+{% endblock %}

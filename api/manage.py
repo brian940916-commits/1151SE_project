@@ -2,7 +2,7 @@ import argparse
 from getpass import getpass
 
 from app.db import ROOT, connect
-from app.main import Credentials
+from app.accounts import Credentials
 from app.security import hash_password
 
 
@@ -15,7 +15,7 @@ def main():
     with connect() as db:
         if args.command == "init":
             migrations = sorted((ROOT / "database/migrations").glob("*.sql"))
-            for file in [*migrations, ROOT / "database/seed.sql"]:
+            for file in [*migrations, ROOT / "database/seed.sql", ROOT / "database/room_profiles.sql"]:
                 db.execute(file.read_text(encoding="utf-8"))
             print("資料表與教室清單已就緒。")
             return

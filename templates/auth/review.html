@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}帳號審核{% endblock %}
+{% block content %}
+<h1>待審帳號</h1>
+{% for person in people %}
+  <form class="review" action="/admin/users/{{ person.user_id }}/review" method="post">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <strong>{{ person.username }}</strong>（老師）
+    <button name="decision" value="approved">核准</button>
+    <button name="decision" value="rejected">退件</button>
+  </form>
+{% else %}
+  <p>目前沒有待審申請。</p>
+{% endfor %}
+{% endblock %}
