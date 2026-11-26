@@ -1,16 +1,18 @@
 import secrets
 from typing import Literal
 
-from fastapi import Depends, FastAPI, HTTPException, Response
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from psycopg.errors import UniqueViolation
 from pydantic import BaseModel, Field, field_validator
 
 from .db import connect
 from .security import hash_password, matches, token_hash
+from .auth import access_token, admin, bearer, current_user
+from .routers.scheduling import router as scheduling_router
 
 app = FastAPI(title="1151 SE 共用帳號與空間")
-bearer = HTTPBearer(auto_error=False)
+app.include_router(scheduling_router)
 public_fields = "user_id, username, role, approval_status"
 dummy_hash = hash_password(secrets.token_urlsafe(32))
 
@@ -31,26 +33,6 @@ class Registration(Credentials):
 
 class Decision(BaseModel):
     status: Literal["approved", "rejected"]
-
-
-def current_user(auth: HTTPAuthorizationCredentials | None = Depends(bearer)):
-    if auth:
-        with connect() as db:
-            user = db.execute(
-                "SELECT u.user_id, username, role, approval_status FROM users u "
-                "JOIN auth_sessions s USING (user_id) WHERE token_hash=%s "
-                "AND expires_at > now() AND approval_status='approved'",
-                (token_hash(auth.credentials),),
-            ).fetchone()
-            if user:
-                return user
-    raise HTTPException(401, "請先登入或重新登入")
-
-
-def admin(user=Depends(current_user)):
-    if user["role"] != "admin":
-        raise HTTPException(403, "需要管理員權限")
-    return user
 
 
 @app.post("/api/auth/register", status_code=201)
@@ -92,11 +74,14 @@ def me(user=Depends(current_user)):
 
 
 @app.post("/api/auth/logout", status_code=204)
-def logout(auth: HTTPAuthorizationCredentials | None = Depends(bearer)):
-    if auth:
+def logout(request: Request, auth: HTTPAuthorizationCredentials | None = Depends(bearer)):
+    token = access_token(request, auth)
+    if token:
         with connect() as db:
-            db.execute("DELETE FROM auth_sessions WHERE token_hash=%s", (token_hash(auth.credentials),))
-    return Response(status_code=204)
+            db.execute("DELETE FROM auth_sessions WHERE token_hash=%s", (token_hash(token),))
+    response = Response(status_code=204)
+    response.delete_cookie('access_token')
+    return response
 
 
 @app.get("/api/admin/pending", dependencies=[Depends(admin)])
